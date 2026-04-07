@@ -1,0 +1,167 @@
+{
+  "summary": {
+    "backend": "ollama",
+    "model": "gemma4-e2b-nothink",
+    "mode": "text",
+    "dataset": "qna_text_50.json",
+    "n_questions": 5,
+    "repeats": 1,
+    "n_calls": 5,
+    "n_valid": 5,
+    "wall_clock_sec": 5.97,
+    "accuracy_pct": 0.0,
+    "ttft_sec": {
+      "n": 5,
+      "mean": 0.5066,
+      "median": 0.5333,
+      "p95": null,
+      "min": 0.4414,
+      "max": 0.5504
+    },
+    "total_sec": {
+      "n": 5,
+      "mean": 1.1931,
+      "median": 1.2126,
+      "p95": null,
+      "min": 1.1123,
+      "max": 1.2459
+    },
+    "wall_tps": {
+      "n": 5,
+      "mean": 13.4322,
+      "median": 13.1944,
+      "p95": null,
+      "min": 12.8424,
+      "max": 14.3847
+    },
+    "eval_tps": {
+      "n": 5,
+      "mean": 24.5068,
+      "median": 24.5833,
+      "p95": null,
+      "min": 24.1768,
+      "max": 24.7795
+    },
+    "system": {
+      "n_samples": 6,
+      "free_gb_min": 0.06,
+      "free_gb_max": 0.08,
+      "ollama_rss_gb_max": 1.61,
+      "ollama_cpu_max": 50.9,
+      "ollama_cpu_avg": 34.1,
+      "swap_mb_min": 1133.2,
+      "swap_mb_max": 1133.2,
+      "swap_mb_delta": 0.0
+    },
+    "pre_mem": {
+      "free_gb": 0.07,
+      "inactive_gb": 6.3,
+      "active_gb": 6.33,
+      "wired_gb": 1.79,
+      "swap_mb": 1133.2,
+      "ollama_cpu": 0.0,
+      "ollama_rss_gb": 1.59
+    },
+    "post_warmup_mem": {
+      "free_gb": 0.06,
+      "inactive_gb": 2.83,
+      "active_gb": 2.74,
+      "wired_gb": 8.87,
+      "swap_mb": 1133.2,
+      "ollama_cpu": 42.6,
+      "ollama_rss_gb": 1.6
+    },
+    "post_bench_mem": {
+      "free_gb": 0.07,
+      "inactive_gb": 2.82,
+      "active_gb": 2.75,
+      "wired_gb": 8.86,
+      "swap_mb": 1133.2,
+      "ollama_cpu": 28.5,
+      "ollama_rss_gb": 1.61
+    },
+    "timestamp": "2026-04-07T00:14:54.196527+00:00"
+  },
+  "results": [
+    {
+      "output": "由於您沒有提供任何圖片，我無法判斷您指的是哪一個展",
+      "thinking": null,
+      "ttft_sec": 0.5357375419698656,
+      "ttf_thinking_sec": null,
+      "total_sec": 1.2126362499548122,
+      "eval_count": 16,
+      "prompt_eval_count": 69,
+      "eval_tps": 24.681331271950604,
+      "wall_tps": 13.194393620177712,
+      "question_id": "2656",
+      "expected": "A",
+      "predicted": null,
+      "correct": false,
+      "repeat": 0
+    },
+    {
+      "output": "答案是 **D**。\n\n**解釋：**\n\n題目要求找出與",
+      "thinking": null,
+      "ttft_sec": 0.441441958071664,
+      "ttf_thinking_sec": null,
+      "total_sec": 1.1122946660034359,
+      "eval_count": 16,
+      "prompt_eval_count": 66,
+      "eval_tps": 24.77954598147687,
+      "wall_tps": 14.384677450166407,
+      "question_id": "3002200",
+      "expected": "A",
+      "predicted": "D",
+      "correct": false,
+      "repeat": 0
+    },
+    {
+      "output": "由於您沒有提供任何圖表，我無法根據您的問題來判斷",
+      "thinking": null,
+      "ttft_sec": 0.5332574159838259,
+      "ttf_thinking_sec": null,
+      "total_sec": 1.2242175409337506,
+      "eval_count": 16,
+      "prompt_eval_count": 80,
+      "eval_tps": 24.17678825514474,
+      "wall_tps": 13.069572575962503,
+      "question_id": "1001584",
+      "expected": "B",
+      "predicted": null,
+      "correct": false,
+      "repeat": 0
+    },
+    {
+      "output": "請提供您提到的「照片」。我需要看到照片才能判斷其中動物",
+      "thinking": null,
+      "ttft_sec": 0.4722953330492601,
+      "ttf_thinking_sec": null,
+      "total_sec": 1.1704604170517996,
+      "eval_count": 16,
+      "prompt_eval_count": 62,
+      "eval_tps": 24.31298712503791,
+      "wall_tps": 13.66983433775694,
+      "question_id": "1000430",
+      "expected": "A",
+      "predicted": null,
+      "correct": false,
+      "repeat": 0
+    },
+    {
+      "output": "由於您沒有提供任何關於**特定地點**的法律或罰則資訊",
+      "thinking": null,
+      "ttft_sec": 0.550397332990542,
+      "ttf_thinking_sec": null,
+      "total_sec": 1.2458728749770671,
+      "eval_count": 16,
+      "prompt_eval_count": 94,
+      "eval_tps": 24.58325781471767,
+      "wall_tps": 12.842401758120397,
+      "question_id": "354",
+      "expected": "B",
+      "predicted": null,
+      "correct": false,
+      "repeat": 0
+    }
+  ]
+}

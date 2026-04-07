@@ -1,0 +1,43 @@
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+.venv/
+.uv/
+.python-version
+
+# uv lockfile is committed
+# uv.lock is intentionally tracked
+
+# Jupyter
+.ipynb_checkpoints/
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Editor
+.vscode/
+.idea/
+*.swp
+
+# Local data caches (HF datasets etc.)
+.cache/
+*.parquet
+
+# Large generated files (regenerable from scripts)
+data/qna_raw_text_500.json
+data/qna_raw_vision_meta_500.json
+
+# Vision dataset is 59 MB with base64 images — use Git LFS or regenerate
+# Uncomment to exclude:
+# data/qna_vision_50.json
+
+# Benchmark results — keep these (they ARE the article data)
+# results/*.json
+# results/*.jsonl
+
+# Local secrets
+.env
+.env.local
+*.key

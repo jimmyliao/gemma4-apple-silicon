@@ -1,0 +1,18 @@
+[project]
+name = "gemma4-apple-silicon"
+version = "0.1.0"
+description = "Gemma4 benchmark on Apple Silicon — Ollama vs MLX Server"
+requires-python = ">=3.11"
+dependencies = [
+    "datasets>=2.19",
+    "huggingface-hub>=0.23",
+    "pillow>=10.0",
+    "psutil>=5.9",
+    "requests>=2.31",
+    "tqdm>=4.66",
+]
+
+[dependency-groups]
+dev = [
+    "jupytext>=1.19.1",
+]

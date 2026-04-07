@@ -1,0 +1,4 @@
+{"timestamp":"2026-04-06T23:10:10Z","label":"baseline","mem":{"free_gb":7.96,"inactive_gb":1.74,"active_gb":2.45,"wired_gb":1.75,"compressed_gb":0.84,"available_gb":9.71},"swap_mb":894,"ollama":{"cpu_pct":0.0,"rss_gb":0.08},"pressure":"LOW"}
+{"timestamp":"2026-04-07T01:47:06Z","label":"baseline","mem":{"free_gb":7.81,"inactive_gb":2.43,"active_gb":2.71,"wired_gb":1.76,"compressed_gb":0.47,"available_gb":10.24},"swap_mb":1005,"ollama":{"cpu_pct":0.0,"rss_gb":0.21},"pressure":"LOW"}
+{"timestamp":"2026-04-07T01:47:24Z","label":"baseline","mem":{"free_gb":7.81,"inactive_gb":2.43,"active_gb":2.70,"wired_gb":1.78,"compressed_gb":0.47,"available_gb":10.24},"swap_mb":1005,"ollama":{"cpu_pct":0.0,"rss_gb":0.21},"pressure":"LOW"}
+{"timestamp":"2026-04-07T01:47:26Z","label":"baseline","mem":{"free_gb":7.81,"inactive_gb":2.43,"active_gb":2.71,"wired_gb":1.76,"compressed_gb":0.47,"available_gb":10.24},"swap_mb":1005,"ollama":{"cpu_pct":0.0,"rss_gb":0.21},"pressure":"LOW"}
