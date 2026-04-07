@@ -27,7 +27,8 @@ help:
 	@echo "  benchmark-nothink Run Ollama nothink benchmark (50 text + 50 vision)"
 	@echo "  benchmark-think   Run Ollama think benchmark (10-probe → 50 full)"
 	@echo ""
-	@echo "  pull-mlx-model    Download MLX model from Google Drive (rclone)"
+	@echo "  pull-mlx-model    Download MLX model from Drive (gws CLI, primary)"
+	@echo "  pull-mlx-model-rclone  Same, but via rclone (fallback)"
 	@echo "  serve-vmlx        Start vmlx OpenAI-compatible server on :8000"
 	@echo "  benchmark-mlx     Run MLX benchmark (requires serve-vmlx running)"
 	@echo "  benchmark-all     Run all benchmarks sequentially"
@@ -127,7 +128,10 @@ benchmark-think: data/qna_text_50.json
 		--output $(RESULTS_DIR)/think_vision.json
 
 pull-mlx-model:
-	@bash scripts/m1_pull_mlx_model.sh
+	@bash scripts/m1_pull_mlx_model_gws.sh
+
+pull-mlx-model-rclone:
+	@bash scripts/m1_pull_mlx_model_rclone.sh
 
 serve-vmlx:
 	@bash scripts/m1_serve_vmlx.sh

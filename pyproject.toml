@@ -6,11 +6,18 @@ requires-python = ">=3.11"
 dependencies = [
     "datasets>=2.19",
     "huggingface-hub>=0.23",
+    "mlx>=0.31.1",
+    # mlx-lm from git main: PyPI 0.31.1 lacks Gemma 4 support (PR #1093 merged
+    # but no PyPI release yet as of 2026-04-07)
+    "mlx-lm",
     "pillow>=10.0",
     "psutil>=5.9",
     "requests>=2.31",
     "tqdm>=4.66",
 ]
+
+[tool.uv.sources]
+mlx-lm = { git = "https://github.com/ml-explore/mlx-lm.git", branch = "main" }
 
 [dependency-groups]
 dev = [

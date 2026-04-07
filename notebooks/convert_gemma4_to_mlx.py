@@ -132,15 +132,49 @@ print(f"HF repo: {HF_REPO_ID}")
 print(f"Quant  : {QUANTIZE_BITS}-bit, group_size={GROUP_SIZE}")
 
 # %% [markdown]
-# ## 5. Run conversion
+# ## 5. Run conversion (PLE-safe)
+#
+# **⚠️ Critical**: Default `mlx_lm.convert(quantize=True)` quantizes PLE
+# (Per-Layer Embedding) layers in Gemma 4, which produces garbage output on
+# the Metal backend (Apple Silicon). The CUDA backend hides this by silently
+# dequantizing some layers at runtime, but Metal does not.
+#
+# Fix: pass a custom `quant_predicate` that skips PLE-related layers, keeping
+# them in bf16. Affected layers in `mlx_lm/models/gemma4_text.py`:
+#
+# - `embed_tokens_per_layer` (nn.Embedding, vocab_size_per_layer_input × dim)
+# - `per_layer_model_projection` (top-level Linear)
+# - `per_layer_input_gate` (per DecoderLayer Linear)
+# - `per_layer_projection` (per DecoderLayer Linear)
+#
+# Reference: https://github.com/FakeRocket543/mlx-gemma4 (independent fork)
 #
 # Steps:
 # 1. Download `google/gemma-4-e2b-it` (~10 GB) — Colab CDN, ~3-5 min
-# 2. Quantize weights to 4-bit (~5-10 min on T4, faster on A100/H100)
+# 2. Quantize weights to 4-bit, **skipping PLE** (~5-10 min)
 # 3. Save MLX format to `LOCAL_OUT_DIR`
 #
-# **Memory needed**: ~12 GB peak (F16 model + quantization buffers).
-# T4 (16 GB VRAM) is enough; A100 (40 GB) is comfortable.
+# **Memory needed**: ~12 GB peak. T4 (16 GB VRAM) is enough.
+
+# %%
+def ple_safe_predicate(path: str, module) -> bool:
+    """Quantize predicate that skips PLE layers (bf16 fallback).
+
+    Returns True to quantize, False to keep in bf16.
+    PLE layers are sensitive to quantization noise because their outputs
+    are scalar-multiplied (per_layer_input_scale, per_layer_projection_scale,
+    embed_tokens_per_layer_scale) which amplifies error catastrophically.
+    """
+    # Skip all per_layer_* paths (input gate, projection, model projection, norms)
+    if "per_layer" in path:
+        return False
+    # Skip the per-layer embedding table
+    if "embed_tokens_per_layer" in path:
+        return False
+    # Skip vision/audio towers if present (multimodal)
+    if any(s in path for s in ("vision_tower", "audio_tower", "embed_vision", "embed_audio")):
+        return False
+    return True
 
 # %%
 import time
@@ -153,6 +187,7 @@ convert(
     quantize=True,
     q_bits=QUANTIZE_BITS,
     q_group_size=GROUP_SIZE,
+    quant_predicate=ple_safe_predicate,
 )
 elapsed = time.time() - t0
 print(f"\nConversion done in {elapsed:.1f}s ({elapsed/60:.1f} min)")
