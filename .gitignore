@@ -25,6 +25,9 @@ Thumbs.db
 .cache/
 *.parquet
 
+# MLX model weights (~2.7 GB) — pull from Google Drive via rclone
+models/
+
 # Large generated files (regenerable from scripts)
 data/qna_raw_text_500.json
 data/qna_raw_vision_meta_500.json

@@ -59,21 +59,28 @@ print("GPU:", gpu_info())
 # ## 2. Install MLX (CUDA backend) + dependencies
 #
 # - `mlx[cuda]` — Apple's MLX framework with CUDA backend (Linux x86_64)
-# - `mlx-lm` — language model utilities. **Install from git main**, because the
-#   PyPI release (≤0.31.x) does NOT yet include Gemma 4 support
-#   ([PR #1093 merged 2026-04-04](https://github.com/ml-explore/mlx-lm/pull/1093)).
-# - `huggingface_hub` — auth + push to your repo
+# - `mlx-lm` from **git main** — PyPI release (≤0.31.x) does NOT include Gemma 4
+#   support yet. [PR #1093](https://github.com/ml-explore/mlx-lm/pull/1093)
+#   merged 2026-04-04 added `gemma4.py` / `gemma4_text.py` model classes.
+# - `huggingface_hub` — auth and (optional) push to your repo
+#
+# **One-shot install** to avoid the PyPI version being loaded first:
 
 # %%
-# !pip install -q "mlx[cuda]" "huggingface_hub[cli]"
-# !pip install -q -U "git+https://github.com/ml-explore/mlx-lm.git"
+# !pip install -q "mlx[cuda]" huggingface_hub
+# !pip install -q -U --force-reinstall --no-deps "git+https://github.com/ml-explore/mlx-lm.git"
 
 # %%
-# Verify gemma4 model class is available
+# Sanity check: MLX backend + gemma4 model class are loaded
+import mlx.core as mx
 import mlx_lm.models
+
+print("MLX device:", mx.default_device())   # expect Device(gpu, 0) on CUDA runtime
+
 gemma_modules = [m for m in dir(mlx_lm.models) if "gemma" in m.lower()]
 print("Gemma model classes available:", gemma_modules)
-# Expected to include: gemma, gemma2, gemma3, gemma3_text, gemma4, gemma4_text
+assert "gemma4" in gemma_modules, "❌ gemma4 module missing — did the git install succeed?"
+print("✅ gemma4 support confirmed")
 
 # %%
 import mlx.core as mx

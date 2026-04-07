@@ -2,12 +2,13 @@
 # Requires: uv, ollama, gemini CLI
 # Usage: make <target>
 
-.PHONY: help install monitor download-data prepare-qna benchmark-nothink benchmark-think benchmark-all benchmark-vision clean
+.PHONY: help install monitor download-data prepare-qna benchmark-nothink benchmark-think benchmark-all benchmark-vision pull-mlx-model serve-vmlx benchmark-mlx clean
 
 # ── Config ────────────────────────────────────────────────────────────────────
 OLLAMA_NOTHINK  := gemma4-e2b-nothink
 OLLAMA_THINK    := gemma4:e2b
-MLX_MODEL       := mlx-community/gemma-4-E2B-it-4bit
+MLX_MODEL_DIR   := models/gemma-4-e2b-it-mlx-4bit
+MLX_MODEL_NAME  := gemma-4-e2b-it-mlx-4bit
 MONITOR_SCRIPT  := scripts/monitor.sh
 RESULTS_DIR     := results
 
@@ -25,7 +26,10 @@ help:
 	@echo ""
 	@echo "  benchmark-nothink Run Ollama nothink benchmark (50 text + 50 vision)"
 	@echo "  benchmark-think   Run Ollama think benchmark (10-probe → 50 full)"
-	@echo "  benchmark-mlx     Run MLX server benchmark"
+	@echo ""
+	@echo "  pull-mlx-model    Download MLX model from Google Drive (rclone)"
+	@echo "  serve-vmlx        Start vmlx OpenAI-compatible server on :8000"
+	@echo "  benchmark-mlx     Run MLX benchmark (requires serve-vmlx running)"
 	@echo "  benchmark-all     Run all benchmarks sequentially"
 	@echo ""
 	@echo "  mem-check         Quick memory snapshot"
@@ -122,12 +126,28 @@ benchmark-think: data/qna_text_50.json
 		--repeats 3 \
 		--output $(RESULTS_DIR)/think_vision.json
 
+pull-mlx-model:
+	@bash scripts/m1_pull_mlx_model.sh
+
+serve-vmlx:
+	@bash scripts/m1_serve_vmlx.sh
+
 benchmark-mlx: data/qna_text_50.json
 	@mkdir -p $(RESULTS_DIR)
+	@if [ ! -f $(MLX_MODEL_DIR)/model.safetensors ] && [ ! -f $(MLX_MODEL_DIR)/model.safetensors.index.json ]; then \
+		echo "❌ MLX model not found at $(MLX_MODEL_DIR)"; \
+		echo "   Run: make pull-mlx-model"; \
+		exit 1; \
+	fi
+	@if ! curl -s -o /dev/null -w "%{http_code}" http://localhost:8000/v1/models | grep -q 200; then \
+		echo "❌ vmlx server not running on :8000"; \
+		echo "   In another terminal: make serve-vmlx"; \
+		exit 1; \
+	fi
 	@echo "▶ Benchmark: MLX server — text-only 50 questions"
 	uv run python benchmark/benchmark.py \
 		--backend mlx \
-		--model $(MLX_MODEL) \
+		--model $(MLX_MODEL_NAME) \
 		--dataset data/qna_text_50.json \
 		--mode text \
 		--repeats 3 \
@@ -135,7 +155,7 @@ benchmark-mlx: data/qna_text_50.json
 	@echo "▶ Benchmark: MLX server — vision 50 questions"
 	uv run python benchmark/benchmark.py \
 		--backend mlx \
-		--model $(MLX_MODEL) \
+		--model $(MLX_MODEL_NAME) \
 		--dataset data/qna_vision_50.json \
 		--mode vision \
 		--repeats 3 \
