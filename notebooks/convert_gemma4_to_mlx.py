@@ -59,11 +59,21 @@ print("GPU:", gpu_info())
 # ## 2. Install MLX (CUDA backend) + dependencies
 #
 # - `mlx[cuda]` — Apple's MLX framework with CUDA backend (Linux x86_64)
-# - `mlx-lm` — language model utilities (convert, generate, quantize)
+# - `mlx-lm` — language model utilities. **Install from git main**, because the
+#   PyPI release (≤0.31.x) does NOT yet include Gemma 4 support
+#   ([PR #1093 merged 2026-04-04](https://github.com/ml-explore/mlx-lm/pull/1093)).
 # - `huggingface_hub` — auth + push to your repo
 
 # %%
-# !pip install -q "mlx[cuda]" mlx-lm "huggingface_hub[cli]"
+# !pip install -q "mlx[cuda]" "huggingface_hub[cli]"
+# !pip install -q -U "git+https://github.com/ml-explore/mlx-lm.git"
+
+# %%
+# Verify gemma4 model class is available
+import mlx_lm.models
+gemma_modules = [m for m in dir(mlx_lm.models) if "gemma" in m.lower()]
+print("Gemma model classes available:", gemma_modules)
+# Expected to include: gemma, gemma2, gemma3, gemma3_text, gemma4, gemma4_text
 
 # %%
 import mlx.core as mx
