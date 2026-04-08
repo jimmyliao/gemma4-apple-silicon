@@ -33,17 +33,21 @@ MLX_URL = "http://localhost:8000/v1/chat/completions"
 
 
 def call_ollama_stream(model: str, prompt: str, image_b64: str | None = None,
-                       max_tokens: int = 16, think: bool = True) -> dict:
+                       max_tokens: int = 16, think: bool = True,
+                       num_ctx: int = 2048, keep_alive: str = "5m") -> dict:
     """Call Ollama streaming API. Returns dict with timing + output.
 
     think=False forces non-thinking mode (Ollama 0.5+ /api/generate `think` field).
+    num_ctx: context window size — smaller = less KV cache memory pressure.
+    keep_alive: model unload timeout. "5m" default, "0" unload immediately.
     """
     payload = {
         "model": model,
         "prompt": prompt,
         "stream": True,
         "think": think,
-        "options": {"num_predict": max_tokens, "temperature": 0.0},
+        "keep_alive": keep_alive,
+        "options": {"num_predict": max_tokens, "temperature": 0.0, "num_ctx": num_ctx},
     }
     if image_b64:
         payload["images"] = [image_b64]
@@ -282,6 +286,10 @@ def main():
     ap.add_argument("--max-tokens", type=int, default=16)
     ap.add_argument("--think", action="store_true",
                     help="Enable thinking mode (Ollama 0.5+). Default: off (faster).")
+    ap.add_argument("--num-ctx", type=int, default=2048,
+                    help="Ollama context window. Smaller = less KV cache memory. Default: 2048.")
+    ap.add_argument("--keep-alive", default="5m",
+                    help="Ollama model unload timeout. Default: 5m.")
     ap.add_argument("--output", required=True, type=Path)
     args = ap.parse_args()
 
@@ -293,7 +301,8 @@ def main():
 
     if args.backend == "ollama":
         def call_fn(model, prompt, img, max_tokens):
-            return call_ollama_stream(model, prompt, img, max_tokens, think=args.think)
+            return call_ollama_stream(model, prompt, img, max_tokens, think=args.think,
+                                      num_ctx=args.num_ctx, keep_alive=args.keep_alive)
     else:
         def call_fn(model, prompt, img, max_tokens):
             return call_mlx_stream(model, prompt, img, max_tokens)

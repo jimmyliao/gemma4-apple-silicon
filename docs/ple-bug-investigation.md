@@ -411,7 +411,7 @@ convert(
 
 ---
 
-## TL;DR
+## TL;DR (Phase 1 — 以為是 PLE 但證偽了)
 
 | Phase | 做了什麼 | 學到 |
 |-------|---------|------|
@@ -420,6 +420,245 @@ convert(
 | 3 | 重 smoke test → 還是亂碼 | 修一個 bug 不代表全部 bug |
 | 4 | 讀 gemma4_text.py 源碼 | 找到 PLE layer 結構 |
 | 5 | 看 .safetensors keys | 確認 PLE 被量化 |
-| 6 | 找 `quant_predicate` hook | 修法清楚，適合送 upstream PR |
+| 6 | 找 `quant_predicate` hook | 找到 fix point |
+| 7 | 寫 dequantize 腳本 → 跑 → **還是亂碼** | **PLE quantization 不是 bug** |
 
-**最終 fix**：用 `mlx_lm.convert(quant_predicate=ple_safe_predicate)` 跳過 PLE 層的量化。
+---
+
+## Phase 2: 證偽 PLE，找到真正 bug
+
+寫了 `scripts/m1_dequantize_ple.py`：把 PLE 的 72 個 quantized tensor 用 `mx.dequantize()` 還原成 bf16，存成新 model。
+
+跑 smoke test：
+
+```
+M1 + dequantized PLE model:
+  '問題：台灣首都是？\nA. ...\nD. 台南\n請只回答字母：' → '台灣：台灣：台灣：'
+  Peak memory: 6.08 GB（比 broken model 的 2.6 GB 高，weights 確實有變大）
+```
+
+**還是亂碼，跟 broken 一模一樣**。
+
+### 加上 embed_tokens dequantize（仍然亂碼）
+
+懷疑 `embed_tokens`（主要 token embedding）也被量化，且 `tie_word_embeddings=True`（embed_tokens 同時當 lm_head）→ 直接污染 logits。
+
+驗證：
+```python
+weights['language_model.model.embed_tokens.weight'].shape  # (262144, 192)  # packed uint32
+weights['language_model.model.embed_tokens.scales'].shape  # (262144, 24)
+```
+
+確認 `embed_tokens` 也是 4-bit packed。把 SCALE_SENSITIVE_PATTERNS 擴大到 `("embed_tokens", "per_layer", "lm_head")`，再跑一次 dequantize → output size 從 5.63 GB 變 6.17 GB，更多 layers 變 bf16。
+
+Smoke test：
+```
+'問題：台灣首都是？...' → '台灣：台灣：台灣：' (一字不變)
+Peak memory: 6.66 GB
+```
+
+**仍然 byte-identical 亂碼**。Greedy decoding 是 deterministic 的，所以「相同 input 同 model 同 output」可能代表：
+- (a) Model 沒實際載入新 weights（cache？）
+- (b) Bug 不在 weights，在別處
+
+### 換 prompts 確認 bug 性質
+
+```python
+'Hello'                  → 'HelloHelloHelloHelloHelloHello...'
+'The capital of France is' → ' France France France France...'
+'1+1='                  → '1=1=1=1='
+'台灣'                    → '台灣台灣台灣台灣...'
+```
+
+**Aha** —— 模型純粹在重複 input 的 last token / last fragment。完全沒在生成。
+
+### Forward pass trace
+
+跑 model forward 看 logits：
+
+```python
+input_ids = mx.array(t.encode("Hello"))   # → [9259]
+logits = model(input_ids[None])           # shape (1, 1, 262144)
+next_logits = logits[0, -1]
+# Range: min=-25.375 max=0.183
+# Top tokens: 'Hello' (0.183), '<turn|>' (-0.316), '\n' (-0.742)
+```
+
+**Logit range 0.183 太窄**——正常 LLM 應該到 ±20-50。
+
+### 跟 broken 原 model 比對
+
+```python
+# Original (PLE 量化錯誤的 broken) model:
+# Hello → Hello (0.447), <turn|> (-0.416), \n (-0.707)
+# Range: min=-25.250 max=0.447
+
+# Dequantized PLE + embed_tokens model:
+# Hello → Hello (0.183), <turn|> (-0.316), \n (-0.742)
+# Range: min=-25.375 max=0.183
+```
+
+**兩個 model 的 logit pattern 一模一樣**！只有絕對數值差一點點。Top-3 token 排名完全相同。
+
+**結論**：PLE quantization、embed_tokens quantization 都不是真正 bug。模型是 semantically broken（forward pass 整個壞掉），跟 weight precision 無關。
+
+---
+
+## Phase 3: 真正的 bug 在哪？
+
+目前還沒解。但收集到的線索：
+
+1. **Colab CUDA 同樣 mlx-lm 0.31.2 跑同樣 model.safetensors，輸出 'A\\n' 正確**
+2. **M1 Metal 同樣 mlx-lm 0.31.2 跑同樣檔案，輸出 echo input**
+3. **MD5 完全 match**（檔案不是問題）
+4. **logit pattern 兩個 dequantize variant 完全相同**（weight 變動沒救）
+5. **forward pass 確實跑了**（peak memory 對的，不是早 return）
+
+可能性：
+- (A) **mlx 0.31.1 Metal 後端對某個 op 實作有 bug**（gemma4 用到的特殊 op）
+- (B) **mlx-lm gemma4_text.py 的 forward 方法在 Metal 路徑掉資料**
+- (C) **Quantized Linear 在 Metal 上 dequantize-on-load 失敗**（非 PLE 的 quantized layer 也是壞的）
+- (D) **某個 attention mask / RoPE 在 Metal 上算錯**
+
+最可能是 (C) — 因為**所有 quantized layers 在 Metal 上的 dequantize 邏輯本身就壞**，而不只是 PLE。
+
+### 下一步驗證計畫
+
+1. 把**所有** quantized layer 都 dequantize（不只 PLE + embed），看 output 是否變正常
+2. 升級 mlx 到最新版（也許有修 Metal quantized linear bug）
+3. 直接從 HuggingFace 找一個**官方公認 working** 的 MLX model（不是 gemma4），確認 mlx-lm + Metal 對非-gemma4 model 是否正常
+
+### 更底層的 fix 候選
+
+如果 (C) 是真的，最快的路是 **整個 model 用 bf16**（不量化），檔案會變 ~10 GB 但保證能跑。對 16GB M1 來說剛好。
+
+或者 **2-bit 量化測試**（看是否所有量化都壞）。
+
+---
+
+## TL;DR（最新版）
+
+**Hypothesis tree 結果**：
+- ❌ H1 (檔案損壞) — 修了 JSON encoding，但問題沒解
+- ❌ H5 (PLE quantization bug) — 看似合理，dequantize 後仍然亂碼，**證偽**
+- ⚠️ H4 (mlx-lm Metal 後端 bug) — 強烈懷疑但需更多驗證
+- ❓ 還沒驗證: 全 dequantize / mlx 升級 / 其他 model 對照組
+
+**lessons learned**：
+1. 修 bug 必須驗證！不要看 hypothesis 漂亮就以為解了
+2. 「跨後端不一致」可能比想像中嚴重，不是 quantization 數值差異而是整個 layer impl 壞掉
+3. **logit pattern 跨 model variant 完全相同 = 強信號表示變動沒進到 forward path**
+4. 真實 debug 比 plan 慢 5-10 倍，要保留 buffer
+
+---
+
+## 2026-04-08 結局：上游已知 bug
+
+### 最終診斷流程
+
+**Step 1**：weight key 100% 比對
+```
+param_keys:  1236
+weight_keys: 1236
+Missing: 0
+Extra:   0
+```
+→ 排除 weight loading 問題
+
+**Step 2**：mlx-community 預轉版交叉驗證
+下載 `mlx-community/gemma-4-e2b-it-4bit`（非我們轉的），同樣 echo：
+```
+prompt: 'The capital of France is'
+output: ' France France France France France France France France France France'
+prompt: '問題：台灣首都是？...'
+output: '台灣：台灣：台灣：台灣：台灣：'
+```
+→ 排除我們的轉換流程問題
+
+**Step 3**：mlx-vlm 同樣 echo（用同一個 gemma4 model 模組）
+**Step 4**：升級到最新 git main (`dcbf6e3`，含 PR #1112/#1114/#1115) 仍 echo
+
+**Step 5**：Layer-by-layer hidden state probe
+```
+After embed: h_norm=97.5
+Layer  0: h_norm=75.5  delta=122  scalar=0.0178
+Layer  4: h_norm=189   delta=113  scalar=0.498
+Layer 34: h_norm=57.7  delta=90   scalar=0.167
+Final norm: h_norm=402
+
+Logits range: [-67, -0.5]   ← 異常窄，max 應該是 +20~+30
+Top 5: [' France', ' to', ' not', ' of', ' a']
+Input: ['The', ' capital', ' of', ' France', ' is']
+                              ↑                ↑
+                              top1 來自 input  last token
+```
+
+模型不是「複製 last token」，而是把 hidden state 拉到「input 中某個更早的 content word embedding」附近。LM head 是 tied (= embed_tokens.T)，所以 argmax 落在那個 token。
+
+### 上游 Issue #1123（找到了！）
+
+GitHub Issue: <https://github.com/ml-explore/mlx-lm/issues/1123>
+- 開立日期：2026-04-07（@BrendanL79）
+- 測試 commit：`dcbf6e3`（與我們完全相同）
+- 重現案例完全一致：`" France is France is France is..."`
+- 第二人 @kernelpool 確認
+- **無 workaround，無 upstream fix**
+- 影響範圍：mlx-community/gemma-4-31b-it-4bit、26b-a4b-it-4bit、本地 quantize from bf16 全部都壞
+- 對照組：Llama-3.2-3B-Instruct-4bit 正常 → mlx-lm 本身沒壞，只 Gemma 4 family 推論壞掉
+
+`mlx_lm/models/gemma4_text.py` 只有 3 個 commits，最後一個是 `f26fddf`（PR #1114）。`dcbf6e3` 之後沒任何修 gemma4 的 commit。
+
+### 真正的 root cause 假設
+
+`@BrendanL79` 推測：PR #1112（`ScaledLinear` → `nn.Linear` for `per_layer_model_projection`）只修了一部分，還有第二個獨立 bug 在同條 quantized-weight code path 上。
+
+從我們的 probe 看：
+- Final hidden state norm 是 402（正常）
+- 但 logits max 只有 -0.5（異常窄）
+- 表示 hidden state 與 embed_tokens 的 dot product 整體偏向 input tokens
+- 推測是 forward pass 中某個層的輸出**極度偏向 input embedding 方向**
+  → 可能是 PLE residual injection 邏輯有 sign error 或 scale error
+  → 也可能是 RMSNorm pre-norm vs post-norm 順序錯
+  → 也可能是 partial RoPE 套用到錯的 channels（前 128 vs 後 128）
+
+### 對我們專案的影響
+
+**Phase 1 benchmark 計畫調整**：
+- ❌ MLX backend (mlx-lm/vmlx/omlx) for Gemma 4 — 上游 bug，跳過直到修好
+- ✅ Ollama (llama.cpp Metal) for Gemma 4 — 已驗證正常，主要 baseline
+- ✅ Article angle 改為 "Gemma 4 silent failure landmine"：
+  1. 同樣的權重在 CUDA/Ollama 正確，在 mlx-lm Metal 壞
+  2. 沒有 error message，沒有 warning，模型載入成功，forward pass 跑完，只是輸出無意義
+  3. 這正是 silent failure 最危險的情境 — 你以為它在跑，結果產生 garbage
+  4. Issue #1123 + 我們的 deep dive 變成完整 debugging case study
+
+### 跨模型 sanity check（pending）
+
+- ⏳ Qwen2.5-VL-3B with mlx-vlm — 確認 mlx-vlm pipeline 對非-gemma4 模型可用
+
+### 對照組驗證（2026-04-08 完成）
+
+```bash
+$ uv run python -c "
+from mlx_lm import load, generate
+m, t = load('models/qwen2.5-0.5b-4bit')
+print(generate(m, t, prompt='The capital of France is', max_tokens=15, verbose=False))
+"
+Paris. It is the largest city in the world. It is the capital   ← ✅ 正常
+
+$ uv run python -c "
+from mlx_lm import load, generate
+m, t = load('models/qwen2.5-0.5b-4bit')
+print(generate(m, t, prompt='問題：台灣首都是？\nA. 台北\nB. 高雄\nC. 台中\nD. 台南\n請只回答字母：', max_tokens=10, verbose=False))
+"
+A
+答案是：A 台北   ← ✅ 正常（中英雙語都對）
+```
+
+**結論**：mlx-lm Metal backend 對 Qwen2.5-0.5B-4bit 完全正常，包括中文與英文 prompt。
+→ M1 環境沒問題、mlx-lm 沒整體性 bug、Metal kernel 沒壞
+→ Bug 100% 是 **Gemma 4 model class 的 forward pass 邏輯**
+
+這是我們可以加進 GitHub Issue #1123 評論的有力證據：
+> Reproduced on M1 Air 16GB with mlx-lm 0.31.2 (commit dcbf6e3) — same `" France France France..."` pattern.
+> Control: `mlx-community/Qwen2.5-0.5B-Instruct-4bit` works correctly on the same M1, same mlx-lm install. Bug is Gemma 4 specific, not a Metal/quant/install issue.
